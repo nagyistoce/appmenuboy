@@ -1,0 +1,9 @@
+_Frequently Asked Questions about [http://code.google.com/p/appmenuboy AppMenuBoy]_
+
+==How is this licensed?==
+
+Apache License, v2.0. That's our standard license for projects on the [http://code.google.com/mac Macintosh Playground]
+
+==Can I help?==
+
+Most certainly. We can accept code submissions too; note that we will need you to complete a [http://code.google.com/legal/individual-cla-v1.0.html Contributor License] Agreement before accepting a change. Other than that, yes please, get in touch via the [http://groups.google.com/group/appmenuboy Google Group] for this project.
