@@ -7,3 +7,13 @@ Apache License, v2.0. That's our standard license for projects on the [http://co
 ==Can I help?==
 
 Most certainly. We accept code submissions. Note that we will need you to complete a [http://code.google.com/legal/individual-cla-v1.0.html Contributor License] Agreement before accepting a change. More details at [http://code.google.com/p/appmenuboy/wiki/BecomingAContributor Becoming A Contributor]. Other than that, yes please, get in touch via the [http://groups.google.com/group/appmenuboy Google Group] for this project.
+
+==Tips==
+
+I organize my Applications folder so that only apps from Apple are in it. For other apps, I create a small number of subfolders. That way, my AppMenuBoy menu does not need to scroll.
+
+I click and hold on AppMenuBoy's Dock icon to reveal AppMenuBoy's Dock menu, but you can also do it by holding down the {Control} key and click once on AppMenuBoy's Dock icon. 
+
+You don't need to hold down the {Control} key once the menu appears.
+
+But If you do, and you need to scroll the AppMenuBoy menu, be warned: In System Preferences, Universal Access, on the Seeing pane, Zoom section, there is an Options button. Press it, and there is a checkbox: "Use scroll wheel with modifier keys to zoom". 
