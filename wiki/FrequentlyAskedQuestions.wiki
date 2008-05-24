@@ -17,3 +17,9 @@ I click and hold on {{{AppMenuBoy}}}'s Dock icon to reveal {{{AppMenuBoy}}}'s Do
 You don't need to hold down the {Control} key once the menu appears.
 
 But If you do, and you need to scroll the {{{AppMenuBoy}}} menu, be warned: In System Preferences, Universal Access, on the Seeing pane, Zoom section, there is an Options button. Press it, and there is a checkbox: "Use scroll wheel with modifier keys to zoom". 
+
+==Comments==
+
+The comment box at the bottom of this page is tempting. Resist!  Rather than entering a comment here, please go to the AppMenuBoy [http://groups.google.com/group/appmenuboy Google Group], and enter it there.
+
+Enter it in the [http://groups.google.com/group/appmenuboy Google Group], and it will email those of us who care about AppMenuBoy. Enter it here, and we won't see it for a long time.
