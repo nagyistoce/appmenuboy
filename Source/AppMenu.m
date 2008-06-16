@@ -59,7 +59,9 @@
 // 1.0.1 12/12/07
 // * folder icons.
 // * File menu removed
-// 1.0.X
+//  6/16/08
+// * Changed format of Interface Builder file for also building on Tiger.
+// 1.0.x 
 
 #import "AppMenu.h"
 #import <Carbon/Carbon.h>
