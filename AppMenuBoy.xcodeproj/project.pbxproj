@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		130FB5D00D08B6D200D793CE /* NSString+ResolveAlias.m in Sources */ = {isa = PBXBuildFile; fileRef = 130FB5CF0D08B6D200D793CE /* NSString+ResolveAlias.m */; };
+		1317D49B1034ABF800D2AF02 /* GTMFileSystemKQueue.m in Sources */ = {isa = PBXBuildFile; fileRef = 1317D49A1034ABF800D2AF02 /* GTMFileSystemKQueue.m */; };
 		1337DD5F0CF3515A00204DF7 /* AppMenu.m in Sources */ = {isa = PBXBuildFile; fileRef = 1337DD5E0CF3515A00204DF7 /* AppMenu.m */; };
 		134C05DC0D48032300B1AA5F /* ReadMe.rtf in Resources */ = {isa = PBXBuildFile; fileRef = 134C05DB0D48032300B1AA5F /* ReadMe.rtf */; };
 		134C05DF0D48032F00B1AA5F /* Credits.rtf in Resources */ = {isa = PBXBuildFile; fileRef = 134C05DD0D48032F00B1AA5F /* Credits.rtf */; };
@@ -25,6 +26,8 @@
 		130FB5CF0D08B6D200D793CE /* NSString+ResolveAlias.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSString+ResolveAlias.m"; sourceTree = "<group>"; };
 		130FB6280D08C6BA00D793CE /* ReadMe.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ReadMe.txt; sourceTree = "<group>"; };
 		130FB63E0D08C8A400D793CE /* AppMenu.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AppMenu.pch; sourceTree = "<group>"; };
+		1317D4991034ABF800D2AF02 /* GTMFileSystemKQueue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GTMFileSystemKQueue.h; sourceTree = "<group>"; };
+		1317D49A1034ABF800D2AF02 /* GTMFileSystemKQueue.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GTMFileSystemKQueue.m; sourceTree = "<group>"; };
 		1337DD5D0CF3515A00204DF7 /* AppMenu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AppMenu.h; sourceTree = "<group>"; };
 		1337DD5E0CF3515A00204DF7 /* AppMenu.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AppMenu.m; sourceTree = "<group>"; };
 		134C05DB0D48032300B1AA5F /* ReadMe.rtf */ = {isa = PBXFileReference; lastKnownFileType = text.rtf; path = ReadMe.rtf; sourceTree = "<group>"; };
@@ -86,6 +89,15 @@
 			path = Documentation;
 			sourceTree = "<group>";
 		};
+		1317D4981034ABF800D2AF02 /* open-source */ = {
+			isa = PBXGroup;
+			children = (
+				1317D4991034ABF800D2AF02 /* GTMFileSystemKQueue.h */,
+				1317D49A1034ABF800D2AF02 /* GTMFileSystemKQueue.m */,
+			);
+			path = "open-source";
+			sourceTree = "<group>";
+		};
 		19C28FACFE9D520D11CA2CBB /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -99,6 +111,7 @@
 			children = (
 				080E96DDFE201D6D7F000001 /* Classes */,
 				29B97315FDCFA39411CA2CEA /* Other Source */,
+				1317D4981034ABF800D2AF02 /* open-source */,
 				29B97317FDCFA39411CA2CEA /* Resources */,
 				130FB6270D08C6BA00D793CE /* Documentation */,
 				29B97323FDCFA39411CA2CEA /* Frameworks */,
@@ -199,6 +212,7 @@
 				8D11072D0486CEB800E47090 /* main.m in Sources */,
 				1337DD5F0CF3515A00204DF7 /* AppMenu.m in Sources */,
 				130FB5D00D08B6D200D793CE /* NSString+ResolveAlias.m in Sources */,
+				1317D49B1034ABF800D2AF02 /* GTMFileSystemKQueue.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

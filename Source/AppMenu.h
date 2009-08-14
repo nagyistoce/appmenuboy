@@ -24,6 +24,9 @@
 // is app's delegate. is dockMenu's delegate
 @interface AppMenu : NSObject {
   IBOutlet NSMenu *dockMenu_;
+  NSMenu *appMenu_;
+  NSMutableArray *kqueues_;
+  BOOL isIgnoringParentheses_;
 }
 
 @end
