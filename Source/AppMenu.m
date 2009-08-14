@@ -3,7 +3,7 @@
 //  AppMenu
 //
 //  Created by David Oster on 1/20/08.
-//  Copyright 2008 Google Inc.
+//  Copyright 2008-2009 Google Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License"); you may not
 //  use this file except in compliance with the License.  You may obtain a copy
@@ -30,17 +30,17 @@
 //      (which, as a side-effect, rebuilds the array of KQueue listeners)
 //    * copies that menu as the dock menu.
 //  
-// - (void)buildTree:(NSString *)path into:(NSMenu *)menu depth:(int)depth;
-//   does the actual work of building a directory into amenu.
+// - (void)buildTree:(NSString *)path intoMenu:(NSMenu *)menu depth:(int)depth;
+//   does the actual work of building a directory into a menu.
 // It loops over all the files in the directory, for each file, categorizing, 
 //    then dispatching to a handler.
 //
 // There are three handlers, each making a menu item:
-// - (void)appBundle:(NSString *)file path:(NSString *)path into:(NSMenu *)menu;
-// - (void)carbonApp:(NSString *)file path:(NSString *)path into:(NSMenu *)menu;
+// - (void)appBundle:(NSString *)file path:(NSString *)path into:(NSMutableArray *)items;
+// - (void)carbonApp:(NSString *)file path:(NSString *)path into:(NSMutableArray *)items;
 //
 // Makes a sub menu menu item for following subfolders.
-// - (void)subDir:(NSString *)file path:(NSString *)path  into:(NSMenu *)menu depth:(int)depth;
+// - (void)subDir:(NSString *)file path:(NSString *)path into:(NSMutableArray *)items depth:(int)depth;
 //
 // The O.S. handles hard links and soft links automatically, but Finder Alias
 //    Files require us to do some work. 
@@ -65,16 +65,28 @@
 // * Listens for directory changes, and rebuild the menu automatically.
 // * Uses the localized name from the en.lproj/InfoPlist.strings file.
 // * Reports its version in the Finder about box.
-// * Refactored to build a NSMutableArray, then build the menu from that, so we can sort the NSMutableArray
+// * Refactored to build a NSMutableArray, sort, build the menu from that
 // * Added a BOOL preference, "ignoringParens", to skip parenthesized folders.
-// - The <Apple> menu is empty when run from the Finder. Fine in the Debugger. 10.5 (ok on 10.6)
-// ? Sort order is different than the Finder.
 // ? Add a BOOL preference dialog to set the ignoringParens preference.
 
 #import "AppMenu.h"
 #import <Carbon/Carbon.h>
 #import "GTMFileSystemKQueue.h" // see http://code.google.com/mac/
 #import "NSString+ResolveAlias.h"
+
+@interface NSMenuItem(AppMenu)
+
+- (NSComparisonResult)compareAsFinder:(NSMenuItem *)other;
+
+@end
+
+@implementation NSMenuItem(AppMenu)
+
+- (NSComparisonResult)compareAsFinder:(NSMenuItem *)other {
+  return [[self title] localizedCaseInsensitiveCompare:[other title]];
+}
+
+@end
 
 typedef enum  {
   kIgnore,
@@ -262,7 +274,7 @@ typedef enum  {
 - (void)buildTree:(NSString *)path intoMenu:(NSMenu *)menu depth:(int)depth {
   NSMutableArray *items = [NSMutableArray array];
   [self buildTree:path into:items depth:depth];
-  // to do: sort here.
+  [items sortUsingSelector:@selector(compareAsFinder:)];
   NSEnumerator *itemsEnumerator = [items objectEnumerator];
   NSMenuItem *item;
   while (nil != (item = [itemsEnumerator nextObject])) {
