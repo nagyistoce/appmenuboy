@@ -18,5 +18,5 @@ This program creates a menu of your applications off of its dock icon.
 See the comments in AppMenu.m for more information.
 
 -- David Phillip Oster
-January 2008
+August 2009
 
