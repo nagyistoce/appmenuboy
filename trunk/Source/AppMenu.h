@@ -24,9 +24,14 @@
 // is app's delegate. is dockMenu's delegate
 @interface AppMenu : NSObject {
   IBOutlet NSMenu *dockMenu_;
+  IBOutlet NSWindow *preferencesWindow_;
+  IBOutlet NSControl *ignoringParentheses_;
   NSMenu *appMenu_;
   NSMutableArray *kqueues_;
+  NSLock *uniqueWorkerThreadLock_;
+  BOOL moreToDo_;
   BOOL isIgnoringParentheses_;
 }
-
+- (IBAction)showPreferencesPanel:(id)sender;
+- (IBAction)toggleIgnoringParentheses:(id)sender;
 @end

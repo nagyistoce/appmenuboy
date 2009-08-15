@@ -5,6 +5,15 @@
 	<key>IBClasses</key>
 	<array>
 		<dict>
+			<key>ACTIONS</key>
+			<dict>
+				<key>showPreferencesPanel</key>
+				<string>id</string>
+				<key>toggleIgnoringParentheses</key>
+				<string>id</string>
+				<key>togglePreferences</key>
+				<string>id</string>
+			</dict>
 			<key>CLASS</key>
 			<string>AppMenu</string>
 			<key>LANGUAGE</key>
@@ -13,6 +22,10 @@
 			<dict>
 				<key>dockMenu_</key>
 				<string>NSMenu</string>
+				<key>ignoringParentheses_</key>
+				<string>NSControl</string>
+				<key>preferencesWindow_</key>
+				<string>NSWindow</string>
 			</dict>
 			<key>SUPERCLASS</key>
 			<string>NSObject</string>
