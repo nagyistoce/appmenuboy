@@ -64,15 +64,47 @@
 // 1.0.2 8/10/09
 // * Listens for directory changes, and rebuild the menu automatically.
 // * Uses the localized name from the en.lproj/InfoPlist.strings file.
+// * Uses the localized name for folders.
 // * Reports its version in the Finder about box.
 // * Refactored to build a NSMutableArray, sort, build the menu from that
 // * Added a BOOL preference, "ignoringParens", to skip parenthesized folders.
-// ? Add a BOOL preference dialog to set the ignoringParens preference.
+// 1.0.3 8/14/09
+// * Refactored to do its work in a thread so U.I. doesn't block.
+// * Says "Working…" while its working.
+// * Add a BOOL preference dialog to set the ignoringParens preference.
 
 #import "AppMenu.h"
 #import <Carbon/Carbon.h>
 #import "GTMFileSystemKQueue.h" // see http://code.google.com/mac/
 #import "NSString+ResolveAlias.h"
+
+@interface NSMenu(AppMenu)
+
+- (void)removeAllItems;
+
+- (void)resetFromArray:(NSArray *)array;
+
+@end
+
+@implementation NSMenu(AppMenu)
+
+- (void)removeAllItems {
+  int i, iCount = [self numberOfItems];
+  for (i = iCount - 1;0 <= i; --i) {
+    [self removeItemAtIndex:i];
+  }
+}
+
+- (void)resetFromArray:(NSArray *)array {
+  [self removeAllItems];
+  NSEnumerator *items = [array objectEnumerator];
+  NSMenuItem *item;
+  while (nil != (item = [items nextObject])) {
+    [self addItem:item];
+  }
+}
+
+@end
 
 @interface NSMenuItem(AppMenu)
 
@@ -98,28 +130,60 @@ typedef enum  {
 @interface AppMenu(ForwardDeclarations)
 
 // main routine of this program: loop over a directory building menus
-- (void)buildTree:(NSString *)path into:(NSMutableArray *)items depth:(int)depth;
-- (void)buildTree:(NSString *)path intoMenu:(NSMenu *)menu depth:(int)depth;
+- (void)buildTree:(NSString *)path into:(NSMutableArray *)items depth:(int)depth shouldListen:(BOOL)shouldListen;
+- (void)buildTree:(NSString *)path intoMenu:(NSMenu *)menu depth:(int)depth shouldListen:(BOOL)shouldListen;
 
-- (void)rebuildMenus;
-
+- (void)rebuildMenusInThread;
+- (void)showIgnoringParentheses;
 @end
 
 @implementation AppMenu
 
-- (void)removeAllItemsOf:(NSMenu *)menu {
-  int i, iCount = [menu numberOfItems];
-  for (i = iCount - 1;0 <= i; --i) {
-    [menu removeItemAtIndex:i];
+- (void)applicationDidFinishLaunching:(NSNotification *)notification {
+  NSString *menuTitle = NSLocalizedString(@"Apps", @"");
+  NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:menuTitle action:nil keyEquivalent:@""] autorelease];
+  NSString *workingTitle = NSLocalizedString(@"Working", @"");
+  NSMenuItem *workingItem = [[[NSMenuItem alloc] initWithTitle:workingTitle action:nil keyEquivalent:@""] autorelease];
+  appMenu_ = [[NSMenu alloc] initWithTitle:menuTitle];
+  [appMenu_ addItem:workingItem];
+  [item setSubmenu:appMenu_];
+  [[NSApp mainMenu] addItem:item];
+
+  kqueues_ = [[NSMutableArray alloc] init];
+  uniqueWorkerThreadLock_ = [[NSLock alloc] init];
+  [self rebuildMenusInThread];
+}
+
+- (void)dealloc {
+  [appMenu_ release];
+  [kqueues_ release];
+  [uniqueWorkerThreadLock_ release];
+  [super dealloc];
+}
+
+
+// app will call this to get the dock menu.
+- (NSMenu *)applicationDockMenu:(NSApplication *)sender {
+  return dockMenu_;
+}
+
+// Create a GTMFileSystemKQueue object for the path, and remember it in an array.
+- (void)addKQueueForPath:(NSString *)fullPath {
+  GTMFileSystemKQueue *kq = [[[GTMFileSystemKQueue alloc] 
+      initWithPath:fullPath
+         forEvents:kGTMFileSystemKQueueAllEvents
+     acrossReplace:NO
+            target:self
+            action:@selector(fileSystemKQueue:events:)] autorelease];
+  if (nil != kq) {
+    [kqueues_ addObject:kq];
   }
 }
 
-- (void)openAppItem:(id)sender {
-  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
-  NSString *path = [sender representedObject];
-  if (path) {
-    [ws openFile:path];
-  }
+// Folder changed. Rebuild the menus in a worker thread.
+- (void)fileSystemKQueue:(GTMFileSystemKQueue *)fskq
+                  events:(GTMFileSystemKQueueEvents)events {
+  [self rebuildMenusInThread];
 }
 
 // helper routine: give each item a small icon for app at fullPath.
@@ -132,29 +196,8 @@ typedef enum  {
   }
 }
 
-- (void)addKQueueForPath:(NSString *)fullPath {
-  GTMFileSystemKQueue *kq = [[[GTMFileSystemKQueue alloc] 
-      initWithPath:fullPath
-         forEvents:kGTMFileSystemKQueueDeleteEvent |
-                   kGTMFileSystemKQueueWriteEvent |
-                   kGTMFileSystemKQueueLinkChangeEvent |
-                   kGTMFileSystemKQueueRenameEvent
-     acrossReplace:NO
-            target:self
-            action:@selector(fileSystemKQueue:events:)] autorelease];
-  if (nil != kq) {
-    [kqueues_ addObject:kq];
-  }
-}
-
-
-- (void)fileSystemKQueue:(GTMFileSystemKQueue *)fskq
-                  events:(GTMFileSystemKQueueEvents)events {
-  [self rebuildMenus];
-}
-
 #pragma mark -
-// an ordinary OS X app.
+// Build menu item for an ordinary OS X app.
 // 
 - (void)appBundle:(NSString *)file path:(NSString *)fullPath into:(NSMutableArray *)items {
   NSString *trimmedFile = nil;
@@ -166,7 +209,7 @@ typedef enum  {
     trimmedFile = [(NSString *)displayName autorelease];
   }
   if (nil == trimmedFile) {
-    // Should never happen because Launch Services shoudl already have looked up the correct name.
+    // Should never happen because Launch Services should already have looked up the correct name.
     NSRange matchRange = [file rangeOfString:@".app" options:NSCaseInsensitiveSearch|NSBackwardsSearch|NSAnchoredSearch];
     if (0 != matchRange.length) {
       trimmedFile = [file substringToIndex:matchRange.location];
@@ -178,13 +221,12 @@ typedef enum  {
   [self setImagePath:fullPath forItem:item];
 }
 
-// a subdirectory
-- (void)subDir:(NSString *)file path:(NSString *)fullPath  into:(NSMutableArray *)items depth:(int)depth {
+// Build menu item for a subdirectory
+- (void)subDir:(NSString *)file path:(NSString *)fullPath  into:(NSMutableArray *)items depth:(int)depth shouldListen:(BOOL)shouldListen {
   NSMenu *subMenu = [[[NSMenu alloc] initWithTitle:file] autorelease];
   if (depth < 6) {  // limit recursion depth.
-    [self buildTree:fullPath intoMenu:subMenu depth:1+depth];
+    [self buildTree:fullPath intoMenu:subMenu depth:1+depth shouldListen:shouldListen];
   }
-  [self addKQueueForPath:fullPath];
   if (0 < [subMenu numberOfItems]) {
     NSMenuItem *item = nil;
     if (1 == [subMenu numberOfItems]) {
@@ -192,6 +234,11 @@ typedef enum  {
       [[item retain] autorelease];
       [subMenu removeItemAtIndex:0];
     } else {
+      CFStringRef displayName = NULL;
+      if (noErr == LSCopyDisplayNameForURL((CFURLRef) [NSURL fileURLWithPath:fullPath], &displayName) &&
+        NULL != displayName) {
+        file = [(NSString *)displayName autorelease];
+      }
       item = [[[NSMenuItem alloc] initWithTitle:file action:@selector(openAppItem:) keyEquivalent:@""] autorelease];
       [item setRepresentedObject:fullPath];
       [item setSubmenu:subMenu];
@@ -201,7 +248,7 @@ typedef enum  {
   }
 }
 
-// a all in one file GUI app.
+// Build menu item for an all in one file GUI app.
 - (void)carbonApp:(NSString *)file path:(NSString *)fullPath into:(NSMutableArray *)items {
   NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:file action:@selector(openAppItem:) keyEquivalent:@""] autorelease];
   [item setRepresentedObject:fullPath];
@@ -210,7 +257,7 @@ typedef enum  {
 }
 #pragma mark -
 
-// what kind of file system object is this? returns enum.
+// What kind of file system object is this? returns enum.
 - (FileCategoryEnum)categorizeFile:(NSString *)file path:(NSString *)fullPath {
   if (nil == file || [file hasPrefix:@"."]) {
     return kIgnore;
@@ -250,8 +297,8 @@ typedef enum  {
 }
 
 
-// main routine of this program: loop over a directory building menus
-- (void)buildTree:(NSString *)path into:(NSMutableArray *)items depth:(int)depth {
+// main routine of this program: loop over a directory building menu items into an array
+- (void)buildTree:(NSString *)path into:(NSMutableArray *)items depth:(int)depth shouldListen:(BOOL)shouldListen {
   NSFileManager *fm = [NSFileManager defaultManager];
   NSArray *files = [fm directoryContentsAtPath:path];
   NSEnumerator *fileEnumerator = [files objectEnumerator];
@@ -263,7 +310,7 @@ typedef enum  {
     }
     switch ([self categorizeFile:file path:fullPath]) {
     case kAppBundle: [self appBundle:file path:fullPath into:items]; break;
-    case kSubDir:    [self subDir:file path:fullPath into:items depth:depth + 1]; break;
+    case kSubDir:    [self subDir:file path:fullPath into:items depth:depth + 1 shouldListen:shouldListen]; break;
     case kCarbonApp: [self carbonApp:file path:fullPath into:items];break;
     default:
     case kIgnore:    break;
@@ -271,57 +318,82 @@ typedef enum  {
   }
 }
 
-- (void)buildTree:(NSString *)path intoMenu:(NSMenu *)menu depth:(int)depth {
+// loop over a directory building menu
+- (void)buildTree:(NSString *)path intoMenu:(NSMenu *)menu depth:(int)depth shouldListen:(BOOL)shouldListen {
+  if (shouldListen) {
+    [self performSelectorOnMainThread:@selector(addKQueueForPath:) withObject:path waitUntilDone:YES];
+  }
   NSMutableArray *items = [NSMutableArray array];
-  [self buildTree:path into:items depth:depth];
+  [self buildTree:path into:items depth:depth shouldListen:shouldListen];
   [items sortUsingSelector:@selector(compareAsFinder:)];
-  NSEnumerator *itemsEnumerator = [items objectEnumerator];
-  NSMenuItem *item;
-  while (nil != (item = [itemsEnumerator nextObject])) {
-    [menu addItem:item];
-  }
+  [menu performSelectorOnMainThread:@selector(resetFromArray:) withObject:items waitUntilDone:YES];
 }
 
-
-- (void)replaceAllItemsOfDockMenuWithAllItemsOfAppMenu {
-  [self removeAllItemsOf:dockMenu_];
-  NSMenuItem *item;
-  NSEnumerator *items = [[appMenu_ itemArray] objectEnumerator];
-  while (nil != (item = [items nextObject])) {
-    [dockMenu_ addItem:[[item copy] autorelease]];
-  }
-}
-
-- (void)rebuildAppMenu {
-  if (nil == appMenu_) {
-    appMenu_ = [[NSMenu alloc] initWithTitle:@"Apps"];
-    NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:@"Apps" action:nil keyEquivalent:@""] autorelease];
-    [item setSubmenu:appMenu_];
-    [[NSApp mainMenu] addItem:item];
-  }
-  [self removeAllItemsOf:appMenu_];
-  [self buildTree:@"/Applications" intoMenu:appMenu_ depth:0];
-}
-
+// Do the actual work of rebuilding the menus in a worker thread.
 - (void)rebuildMenus {
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   isIgnoringParentheses_ = [[NSUserDefaults standardUserDefaults] boolForKey:@"ignoringParens"];
-  if (nil == kqueues_) {
-    kqueues_ = [[NSMutableArray alloc] init];
+  [kqueues_ performSelectorOnMainThread:@selector(removeAllObjects) withObject:nil waitUntilDone:YES];
+  [self buildTree:@"/Applications" intoMenu:appMenu_ depth:0 shouldListen:YES];
+  [self buildTree:@"/Applications" intoMenu:dockMenu_ depth:0 shouldListen:NO];
+  [self performSelectorOnMainThread:@selector(scheduleCheckForMore) withObject:nil waitUntilDone:NO];
+  [pool drain];
+}
+
+// Up in the main event loop, on the main thread, check if the KQueue fired while we were working.
+- (void)scheduleCheckForMore {
+  [uniqueWorkerThreadLock_ unlock];
+  [self performSelector:@selector(checkForMore) withObject:nil afterDelay:0.25];
+}
+
+// if the KQueue fired while we were working, do it again.
+- (void)checkForMore {
+  if (moreToDo_) {
+    [self rebuildMenusInThread];
   }
-  [kqueues_ removeAllObjects];
-  [self rebuildAppMenu];
-  [self replaceAllItemsOfDockMenuWithAllItemsOfAppMenu];
 }
 
-- (void)applicationDidFinishLaunching:(NSNotification *)notification {
-  [self rebuildMenus];
+// Rebuild the menus in a worker thread.
+- (void)rebuildMenusInThread {
+  if ([uniqueWorkerThreadLock_ tryLock]) {
+    moreToDo_ = NO;
+    [NSThread detachNewThreadSelector:@selector(rebuildMenus) toTarget:self withObject:nil];
+  } else {
+    // Caller attempts to rebuild while we are already rebuilding.
+    moreToDo_ = YES;
+  }
 }
 
+#pragma mark -
 
-// app will call this to get the dock menu.
-- (NSMenu *)applicationDockMenu:(NSApplication *)sender {
-  return dockMenu_;
+- (void)openAppItem:(id)sender {
+  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+  NSString *path = [sender representedObject];
+  if (path) {
+    [ws openFile:path];
+  }
 }
+
+- (IBAction)showPreferencesPanel:(id)sender {
+  if ([preferencesWindow_ isVisible]) {
+    [preferencesWindow_ orderOut:self];
+  }else {
+    [self showIgnoringParentheses];
+    [preferencesWindow_ makeKeyAndOrderFront:self];
+  }
+}
+
+- (IBAction)toggleIgnoringParentheses:(id)sender {
+  isIgnoringParentheses_ = !isIgnoringParentheses_;
+  [[NSUserDefaults standardUserDefaults] setBool:isIgnoringParentheses_ forKey:@"ignoringParens"];
+  [self rebuildMenusInThread];
+}
+
+- (void)showIgnoringParentheses {
+  isIgnoringParentheses_ = [[NSUserDefaults standardUserDefaults] boolForKey:@"ignoringParens"];
+  [ignoringParentheses_ setIntValue:isIgnoringParentheses_];
+}
+
 
 @end
 // The following was documented as putting an icon in a dock menu item, but I couldn't get it to work:
