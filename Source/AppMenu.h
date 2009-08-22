@@ -26,11 +26,18 @@
   IBOutlet NSMenu *dockMenu_;
   IBOutlet NSWindow *preferencesWindow_;
   IBOutlet NSControl *ignoringParentheses_;
+
+  // builder thread only
   NSMenu *appMenu_;
-  NSMutableArray *kqueues_;
-  NSLock *uniqueWorkerThreadLock_;
-  BOOL moreToDo_;
   BOOL isIgnoringParentheses_;
+
+  // Maps paths to kqueues
+  NSLock *kqueuesLock_;
+  NSMutableDictionary *kqueues_;
+
+  // between main thread, KQueue threads, builder thread
+  NSLock *moreToDoLock_;
+  BOOL moreToDo_;
 }
 - (IBAction)showPreferencesPanel:(id)sender;
 - (IBAction)toggleIgnoringParentheses:(id)sender;
