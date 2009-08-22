@@ -72,10 +72,9 @@
 // * Refactored to do its work in a thread so U.I. doesn't block.
 // * Says "Working…" while its working.
 // * Add a BOOL preference dialog to set the ignoringParens preference.
-// 1.0.4 8/21/09
-// Well, that was a disaster. Now it is often hanging. Rewrite. Use a lock
-// between the KQueue elements and the main thread at their only point of communication: the
-// bool moreToDo
+// 1.0.4 8/22/09
+// Well, that was a disaster. Now it is often hanging. Rewrite. Remove Threads.
+// Since everything is on the main loop, remove locks.
 
 #import "AppMenu.h"
 #import <Carbon/Carbon.h>
@@ -144,7 +143,8 @@ typedef enum  {
 - (void)buildTree:(NSString *)path into:(NSMutableArray *)items depth:(int)depth shouldListen:(BOOL)shouldListen;
 - (void)buildTree:(NSString *)path intoMenu:(NSMenu *)menu depth:(int)depth shouldListen:(BOOL)shouldListen;
 
-- (void)rebuildMenusInThread;
+- (void)rebuildMenus;
+- (void)scheduleCheckForMore;
 - (void)showIgnoringParentheses;
 
 - (BOOL)testAndClearMoreToDo;
@@ -166,19 +166,13 @@ typedef enum  {
   [appMenu_ addItem:workingItem];
   [item setSubmenu:appMenu_];
   [[NSApp mainMenu] addItem:item];
-
-  kqueuesLock_ = [[NSLock alloc] init];
   kqueues_ = [[NSMutableDictionary alloc] init];
-
-  moreToDoLock_ = [[NSLock alloc] init];
-  [self rebuildMenusInThread];
+  [self rebuildMenus];
 }
 
 - (void)dealloc {
   [appMenu_ release];
-  [kqueuesLock_ release];
   [kqueues_ release];
-  [moreToDoLock_ release];
   [super dealloc];
 }
 
@@ -210,7 +204,7 @@ typedef enum  {
   if (events & (kGTMFileSystemKQueueRevokeEvent|kGTMFileSystemKQueueDeleteEvent|kGTMFileSystemKQueueRenameEvent)) {
     [self removeKQueueForKey:[kq path]];
   }
-  [self rebuildMenusInThread];
+  [self rebuildMenus];
 }
 
 // helper routine: give each item a small icon for app at fullPath.
@@ -348,24 +342,25 @@ typedef enum  {
 // loop over a directory building menu
 - (void)buildTree:(NSString *)path intoMenu:(NSMenu *)menu depth:(int)depth shouldListen:(BOOL)shouldListen {
   if (shouldListen) {
-    [self performSelectorOnMainThread:@selector(addKQueueForPath:) withObject:path waitUntilDone:YES];
+    [self addKQueueForPath:path];
   }
   NSMutableArray *items = [NSMutableArray array];
   [self buildTree:path into:items depth:depth shouldListen:shouldListen];
   [items sortUsingSelector:@selector(compareAsFinder:)];
-  [menu performSelectorOnMainThread:@selector(resetFromArray:) withObject:items waitUntilDone:YES];
+  [menu resetFromArray:items];
 }
 
 // Do the actual work of rebuilding the menus in a worker thread.
 - (void)rebuildMenus {
-  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   DEBUGBLOCK{ NSLog(@"rebuildMenus"); }
   isIgnoringParentheses_ = [[NSUserDefaults standardUserDefaults] boolForKey:@"ignoringParens"];
-  [kqueues_ performSelectorOnMainThread:@selector(removeAllObjects) withObject:nil waitUntilDone:YES];
-  [self buildTree:@"/Applications" intoMenu:appMenu_ depth:0 shouldListen:YES];
-  [self buildTree:@"/Applications" intoMenu:dockMenu_ depth:0 shouldListen:NO];
-  [self performSelectorOnMainThread:@selector(scheduleCheckForMore) withObject:nil waitUntilDone:NO];
-  [pool drain];
+  if (!isRebuilding_) {
+    isRebuilding_ = YES;
+    [self buildTree:@"/Applications" intoMenu:appMenu_ depth:0 shouldListen:YES];
+    [self buildTree:@"/Applications" intoMenu:dockMenu_ depth:0 shouldListen:NO];
+    isRebuilding_ = NO;
+  }
+  [self scheduleCheckForMore];
 }
 
 // Up in the main event loop, on the main thread, check if the KQueue fired while we were working.
@@ -376,14 +371,10 @@ typedef enum  {
 // if the KQueue fired while we were working, do it again.
 - (void)checkForMore {
   if ([self testAndClearMoreToDo]) {
-    [self rebuildMenusInThread];
+    [self rebuildMenus];
   }
 }
 
-// Rebuild the menus in a worker thread.
-- (void)rebuildMenusInThread {
-  [NSThread detachNewThreadSelector:@selector(rebuildMenus) toTarget:self withObject:nil];
-}
 
 #pragma mark -
 
@@ -407,7 +398,7 @@ typedef enum  {
 - (IBAction)toggleIgnoringParentheses:(id)sender {
   isIgnoringParentheses_ = !isIgnoringParentheses_;
   [[NSUserDefaults standardUserDefaults] setBool:isIgnoringParentheses_ forKey:@"ignoringParens"];
-  [self rebuildMenusInThread];
+  [self rebuildMenus];
 }
 
 - (void)showIgnoringParentheses {
@@ -416,37 +407,27 @@ typedef enum  {
 }
 
 - (BOOL)testAndClearMoreToDo {
-  [moreToDoLock_ lock];
   BOOL moreToDo = moreToDo_;
   moreToDo_ = NO;
-  [moreToDoLock_ unlock];
   return moreToDo;
 }
 
 - (void)setMoreToDo:(BOOL)moreToDo {
-  [moreToDoLock_ lock];
   moreToDo_ = moreToDo;
-  [moreToDoLock_ unlock];
 }
 
 
 - (GTMFileSystemKQueue *)kqueueForKey:(NSString *)key {
-  [kqueuesLock_ lock];
   GTMFileSystemKQueue *kqueue = [kqueues_ objectForKey:key];
-  [kqueuesLock_ unlock];
   return kqueue;
 }
 
 - (void)setKQueue:(GTMFileSystemKQueue *)kqueue forKey:(NSString *)key {
-  [kqueuesLock_ lock];
   [kqueues_ setObject:kqueue forKey:key];
-  [kqueuesLock_ unlock];
 }
 
 - (void)removeKQueueForKey:(NSString *)key {
-  [kqueuesLock_ lock];
   [kqueues_ removeObjectForKey:key];
-  [kqueuesLock_ unlock];
 }
 
 @end
