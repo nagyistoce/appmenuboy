@@ -32,11 +32,12 @@
   BOOL isIgnoringParentheses_;
 
   // Maps paths to kqueues
-  NSLock *kqueuesLock_;
   NSMutableDictionary *kqueues_;
 
-  // between main thread, KQueue threads, builder thread
-  NSLock *moreToDoLock_;
+  // builder state machine reentrancy guard
+  BOOL isRebuilding_;
+
+  // between KQueue callback, builder state machine.
   BOOL moreToDo_;
 }
 - (IBAction)showPreferencesPanel:(id)sender;
