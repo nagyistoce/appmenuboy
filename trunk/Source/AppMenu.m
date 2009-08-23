@@ -72,9 +72,10 @@
 // * Refactored to do its work in a thread so U.I. doesn't block.
 // * Says "Working…" while its working.
 // * Add a BOOL preference dialog to set the ignoringParens preference.
-// 1.0.4 8/22/09
-// Well, that was a disaster. Now it is often hanging. Rewrite. Remove Threads.
+// 1.0.4 8/23/09
+// Well, that was a disaster. Now 1.0.3 was hanging often. Rewrite. Remove Threads.
 // Since everything is on the main loop, remove locks.
+// Add the cheesy yield method to keep the app responsive.
 
 #import "AppMenu.h"
 #import <Carbon/Carbon.h>
@@ -153,6 +154,8 @@ typedef enum  {
 - (GTMFileSystemKQueue *)kqueueForKey:(NSString *)key;
 - (void)setKQueue:(GTMFileSystemKQueue *)kqueue forKey:(NSString *)key;
 - (void)removeKQueueForKey:(NSString *)key;
+
+- (void)yield;
 @end
 
 @implementation AppMenu
@@ -336,6 +339,7 @@ typedef enum  {
     default:
     case kIgnore:    break;
     }
+    [self yield];
   }
 }
 
@@ -429,6 +433,16 @@ typedef enum  {
 - (void)removeKQueueForKey:(NSString *)key {
   [kqueues_ removeObjectForKey:key];
 }
+
+// To prevent the spinning pizza of unresponsiveness, spin the event loop at most 5 times a second.
+- (void)yield {
+  NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+  if (0.2 < now - timeOfLastYield_) {
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.01]];
+    timeOfLastYield_ = [NSDate timeIntervalSinceReferenceDate];
+  }
+}
+
 
 @end
 // The following was documented as putting an icon in a dock menu item, but I couldn't get it to work:

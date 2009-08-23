@@ -37,8 +37,10 @@
   // builder state machine reentrancy guard
   BOOL isRebuilding_;
 
-  // between KQueue callback, builder state machine.
+  // between KQueue callback, builder
   BOOL moreToDo_;
+
+  NSTimeInterval timeOfLastYield_;
 }
 - (IBAction)showPreferencesPanel:(id)sender;
 - (IBAction)toggleIgnoringParentheses:(id)sender;
