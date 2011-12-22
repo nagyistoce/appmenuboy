@@ -13,7 +13,7 @@
 //  License for the specific language governing permissions and limitations under
 //  the License.
 
-This program creates a menu of your applications off of its dock icon.
+This program creates a menu of your applications when you control-click on its dock icon.
 
 See the comments in AppMenu.m for more information.
 
