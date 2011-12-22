@@ -76,6 +76,20 @@
 // Well, that was a disaster. Now 1.0.3 was hanging often. Rewrite. Remove Threads.
 // Since everything is on the main loop, remove locks.
 // Add the cheesy yield method to keep the app responsive.
+// 1.0.6 11/14/2010
+// * Added a preference to point at an alternate root directory
+// * must rebuild menu when the alternate root directory changes
+// 1.0.7 12/22/2011
+// * Hide adobe uninstallers which have uninformative GUID names
+// * Omit Carbon Apps in OS X Lion and newer.
+// BUG: PowerPC apps should also be omitted on Lion.
+// BUG: changes to the menu don't seem to be tracked correctly, particulary when
+//   using an alternate root.
+// TODO: make two passes over the directory tree, one to get app names, a second
+// pass to get the icons. That should make getting the initial menu much faster.
+// TODO: Add error message if root directory has no contents.
+// Since the alternate root feature is not quite ready for prime-time, I've set
+// the preference window frame to hide the feature.
 
 #import "AppMenu.h"
 #import <Carbon/Carbon.h>
@@ -89,6 +103,23 @@
 #define DEBUGBLOCK if(0)
 #endif
 
+// Assume that Carbon apps are not supported in OS X 10.7 an d newer.
+static BOOL AreCarbonAppsSupported(void) {
+  static BOOL isInitialized = NO;
+  static BOOL areCarbonAppsSupported = YES;
+  if ( ! isInitialized) {
+    isInitialized = YES;
+    SInt32 major = 0, minor = 0;
+    if (noErr == Gestalt(gestaltSystemVersionMajor, &major) &&
+        noErr == Gestalt(gestaltSystemVersionMinor, &minor)) {
+      if (10 <= major && 7 <= minor) {
+        areCarbonAppsSupported = NO;
+      }
+    }
+  }
+  return areCarbonAppsSupported;
+}
+ 
 @interface NSMenu(AppMenu)
 
 - (void)removeAllItems;
@@ -155,6 +186,8 @@ typedef enum  {
 - (void)setKQueue:(GTMFileSystemKQueue *)kqueue forKey:(NSString *)key;
 - (void)removeKQueueForKey:(NSString *)key;
 
+- (NSString *)rootPath;
+
 - (void)yield;
 @end
 
@@ -179,6 +212,13 @@ typedef enum  {
   [super dealloc];
 }
 
+- (void)applicationWillTerminate:(NSNotification *)notification {
+  isTerminating_ = YES;
+  if ([preferencesWindow_ isVisible]) {
+    [preferencesWindow_ orderOut:self];
+  }
+  [[NSUserDefaults standardUserDefaults] synchronize];
+}
 
 // app will call this to get the dock menu.
 - (NSMenu *)applicationDockMenu:(NSApplication *)sender {
@@ -239,10 +279,13 @@ typedef enum  {
       trimmedFile = [file substringToIndex:matchRange.location];
     }
   }
-  NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:trimmedFile action:@selector(openAppItem:) keyEquivalent:@""] autorelease];
-  [item setRepresentedObject:fullPath];
-  [items addObject:item];
-  [self setImagePath:fullPath forItem:item];
+  // Adobe likes to create uninstallers with uninformative GUID names. Skip them.
+  if (!([trimmedFile hasPrefix:@"{"] && [trimmedFile hasSuffix:@"}"])) {
+    NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:trimmedFile action:@selector(openAppItem:) keyEquivalent:@""] autorelease];
+    [item setRepresentedObject:fullPath];
+    [items addObject:item];
+    [self setImagePath:fullPath forItem:item];
+  }
 }
 
 // Build menu item for a subdirectory
@@ -286,18 +329,18 @@ typedef enum  {
   if (nil == file || [file hasPrefix:@"."]) {
     return kIgnore;
   }
+  if (isIgnoringParentheses_ && [file hasPrefix:@"("] && [file hasSuffix:@")"]) {
+    return kIgnore;
+  }
   NSFileManager *fm = [NSFileManager defaultManager];
   BOOL isDirectory = NO;
-  if ([fm fileExistsAtPath:fullPath isDirectory:&isDirectory] && 
-          isDirectory) {
-          
+  if ([fm fileExistsAtPath:fullPath isDirectory:&isDirectory] && isDirectory) {
     NSString *trimmedFile = file;
     NSRange matchRange = [trimmedFile rangeOfString:@".app" options:NSCaseInsensitiveSearch|NSBackwardsSearch|NSAnchoredSearch];
     if (0 != matchRange.length) {
       return kAppBundle;
     }
-
-    // a few early OS X apps don't end in a .app extension. Dig deeper for them.
+    // A few early OS X apps don't end in a .app extension. Dig deeper for them.
     NSWorkspace *ws = [NSWorkspace sharedWorkspace];
     if ([ws isFilePackageAtPath:fullPath]) {
       NSBundle *bundle = [NSBundle bundleWithPath:fullPath];
@@ -306,14 +349,11 @@ typedef enum  {
         return kAppBundle;
       }
     }
-    if (isIgnoringParentheses_ && [file hasPrefix:@"("] && [file hasSuffix:@")"]) {
-      return kIgnore;
-    }
     return kSubDir;
-  } else {
+  } else if (AreCarbonAppsSupported()) {
     NSDictionary *fileAttributes = [fm fileAttributesAtPath:fullPath traverseLink:YES];
     OSType typeCode = [fileAttributes fileHFSTypeCode];
-    if (typeCode == 'APPL') {
+    if (typeCode == 'APPL') {      
       return kCarbonApp;
     }
   }
@@ -360,8 +400,8 @@ typedef enum  {
   isIgnoringParentheses_ = [[NSUserDefaults standardUserDefaults] boolForKey:@"ignoringParens"];
   if (!isRebuilding_) {
     isRebuilding_ = YES;
-    [self buildTree:@"/Applications" intoMenu:appMenu_ depth:0 shouldListen:YES];
-    [self buildTree:@"/Applications" intoMenu:dockMenu_ depth:0 shouldListen:NO];
+    [self buildTree:[self rootPath] intoMenu:appMenu_ depth:0 shouldListen:YES];
+    [self buildTree:[self rootPath] intoMenu:dockMenu_ depth:0 shouldListen:NO];
     isRebuilding_ = NO;
   }
   [self scheduleCheckForMore];
@@ -393,11 +433,28 @@ typedef enum  {
 - (IBAction)showPreferencesPanel:(id)sender {
   if ([preferencesWindow_ isVisible]) {
     [preferencesWindow_ orderOut:self];
-  }else {
+  } else {
     [self showIgnoringParentheses];
+    NSString *s = [[NSUserDefaults standardUserDefaults] stringForKey:@"rootPath"];
+    if (nil == s) { s = @""; }
+    [rootField_ setStringValue:s];
     [preferencesWindow_ makeKeyAndOrderFront:self];
   }
 }
+
+- (void)windowWillClose:(NSNotification *)notification {
+  NSString *oldS = [[NSUserDefaults standardUserDefaults] stringForKey:@"rootPath"];
+  NSString *s = [rootField_ stringValue];
+  if ([s length]) {
+    [[NSUserDefaults standardUserDefaults] setObject:s forKey:@"rootPath"];
+  } else {
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"rootPath"];
+  }
+  if (!isTerminating_ && !(oldS == s || [oldS isEqual:s])) {
+    [self rebuildMenus];
+  }
+}
+
 
 - (IBAction)toggleIgnoringParentheses:(id)sender {
   isIgnoringParentheses_ = !isIgnoringParentheses_;
@@ -408,6 +465,14 @@ typedef enum  {
 - (void)showIgnoringParentheses {
   isIgnoringParentheses_ = [[NSUserDefaults standardUserDefaults] boolForKey:@"ignoringParens"];
   [ignoringParentheses_ setIntValue:isIgnoringParentheses_];
+}
+
+- (NSString *)rootPath {
+  NSString *rootPath = [[[NSUserDefaults standardUserDefaults] stringForKey:@"rootPath"] stringByExpandingTildeInPath];
+  if (0 == [rootPath length]) {
+    rootPath = @"/Applications";
+  }
+  return rootPath;
 }
 
 - (BOOL)testAndClearMoreToDo {

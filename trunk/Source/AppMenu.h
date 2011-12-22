@@ -26,6 +26,7 @@
   IBOutlet NSMenu *dockMenu_;
   IBOutlet NSWindow *preferencesWindow_;
   IBOutlet NSControl *ignoringParentheses_;
+  IBOutlet NSTextField *rootField_;
 
   // builder thread only
   NSMenu *appMenu_;
@@ -39,6 +40,8 @@
 
   // between KQueue callback, builder
   BOOL moreToDo_;
+
+  BOOL isTerminating_;
 
   NSTimeInterval timeOfLastYield_;
 }
